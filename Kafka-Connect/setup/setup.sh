@@ -26,3 +26,12 @@ atom config/connect-distributed.properties
 # 12. Optionally, setup Kafka Connect UI from Landoop
   # Instructions are at: https://github.com/Landoop/kafka-connect-ui
   # You can build from source or use docker for that (see their github)
+
+# JAVA Source Code
+# https://github.com/simplesteph/kafka-connect-github-source/tree/v1.1
+
+# GitHub Issue API
+# https://docs.github.com/en/rest/issues?apiVersion=2022-11-28#list-issues-for-a-repository
+
+# Kafka-Connect-ArchType
+# https://github.com/jcustenborder/kafka-connect-archtype
