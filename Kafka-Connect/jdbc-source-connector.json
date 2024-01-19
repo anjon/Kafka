@@ -1,0 +1,39 @@
+{
+  "name": "JDBC Source Test Connector",
+  "config": {
+    
+    "connector.class": "io.confluent.connect.jdbc.JdbcSourceConnector",
+    "tasks.max": "1",
+
+    "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "key.converter.schema.registry.url": "http://schema-registry:8081",
+    "value.converter.schema.registry.url": "http://schema-registry:8081",
+
+    "transforms": "createKey, setSchema",
+    "transforms.createKey.type": "org.apache.kafka.connect.transforms.ValueToKey",
+    "transforms.createKey.fields": "TXN_ID, TXN_DATE",
+    "transforms.setSchema.type": "org.apache.kafka.connect.transforms.SetSchemaMetadata$Value",
+    "transforms.setSchema.schema.name": "MoneyTransferRecords",
+
+    "connection.url": "jdbc:mysql://mysql-Host:3306/connectdb",
+    "connection.user": "kfkconnect",
+    "connection.password": "secret123",
+    "dialect.name": "MySqlDatabaseDialect",
+
+    "mode": "timestamp+incrementing",
+    "timestamp.column.name": "TXN_ID",
+    "incrementing.column.name": "TXN_ID",
+
+    "numeric.precision.mapping": true,
+    "numeric.mapping": "best_fit",
+
+    "query": "SELECT * FROM (SELECT SENDER_NAME,RECEIVER_NAME,SENDER_ACCT,RECEIVER_ACCT,AMOUNT,SENDER_BANK,RECEIVER_BANK,TXN_ID,TXN_DATE FROM kafkaconnect.money_transfer_data) AS MONEY_TRANSFER_DATA",
+    "table.type": "TABLE",
+
+    "poll.interval.ms": "5000",
+    "batch.max.rows": "15",
+    "topic.prefix": "money-transfer-data-v1",
+    "db.timezome": "Europe/Warsaw" 
+  }
+}
