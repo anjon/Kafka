@@ -2,7 +2,6 @@ package com.vsimon.kafka.streams;
 
 import io.confluent.ksql.function.udf.Udf;
 import io.confluent.ksql.function.udf.UdfDescription;
-import io.confluent.ksql.function.udf.UdfParameter;
 
 @UdfDescription(
     name = "taxi_wait",
@@ -17,7 +16,6 @@ public class TaxiWait {
     @Udf(description = "Given weather and distance return expected wait time in minutes")
     public double taxi_wait(final String weather_description,  final double dist) {
 
-        double ret = -1;
         double weather_factor = 1;
 
         switch(weather_description) 

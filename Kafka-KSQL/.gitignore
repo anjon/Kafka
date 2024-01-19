@@ -13,3 +13,5 @@ java/.idea/*
 pid_file.txt
 cp-6.0-docker/docker-compose.yml
 util/*
+# Mac specific 
+.DS_Store

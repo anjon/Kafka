@@ -21,7 +21,7 @@ public class ConsumerDemoRebalanceListener {
     public static void main(String[] args) {
         log.info("I am a Kafka Consumer with a Rebalance");
 
-        String bootstrapServers = "127.0.0.1:9092";
+        //String bootstrapServers = "127.0.0.1:9092";
         String groupId = "my-fifth-application";
         String topic = "demo_java";
 

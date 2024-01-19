@@ -20,7 +20,7 @@ public class ConsumerDemoAssignSeek {
 
         Logger log = LoggerFactory.getLogger(ConsumerDemoAssignSeek.class.getName());
 
-        String bootstrapServers = "127.0.0.1:9092";
+        //String bootstrapServers = "127.0.0.1:9092";
         String topic = "demo_java";
 
         // create consumer configs
@@ -34,38 +34,38 @@ public class ConsumerDemoAssignSeek {
         properties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         properties.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
-        // create consumer
-        KafkaConsumer<String, String> consumer = new KafkaConsumer<String, String>(properties);
+        try (// create consumer
+        KafkaConsumer<String, String> consumer = new KafkaConsumer<String, String>(properties)) {
+            // assign
+            TopicPartition partitionToReadFrom = new TopicPartition(topic, 0);
+            long offsetToReadFrom = 7L;
+            consumer.assign(Arrays.asList(partitionToReadFrom));
 
-        // assign and seek are mostly used to replay data or fetch a specific message
+            // seek
+            consumer.seek(partitionToReadFrom, offsetToReadFrom);
 
-        // assign
-        TopicPartition partitionToReadFrom = new TopicPartition(topic, 0);
-        long offsetToReadFrom = 7L;
-        consumer.assign(Arrays.asList(partitionToReadFrom));
+            int numberOfMessagesToRead = 5;
+            boolean keepOnReading = true;
+            int numberOfMessagesReadSoFar = 0;
 
-        // seek
-        consumer.seek(partitionToReadFrom, offsetToReadFrom);
+            // poll for new data
+            while(keepOnReading){
+                ConsumerRecords<String, String> records =
+                        consumer.poll(Duration.ofMillis(100));
 
-        int numberOfMessagesToRead = 5;
-        boolean keepOnReading = true;
-        int numberOfMessagesReadSoFar = 0;
-
-        // poll for new data
-        while(keepOnReading){
-            ConsumerRecords<String, String> records =
-                    consumer.poll(Duration.ofMillis(100));
-
-            for (ConsumerRecord<String, String> record : records){
-                numberOfMessagesReadSoFar += 1;
-                log.info("Key: " + record.key() + ", Value: " + record.value());
-                log.info("Partition: " + record.partition() + ", Offset:" + record.offset());
-                if (numberOfMessagesReadSoFar >= numberOfMessagesToRead){
-                    keepOnReading = false; // to exit the while loop
-                    break; // to exit the for loop
+                for (ConsumerRecord<String, String> record : records){
+                    numberOfMessagesReadSoFar += 1;
+                    log.info("Key: " + record.key() + ", Value: " + record.value());
+                    log.info("Partition: " + record.partition() + ", Offset:" + record.offset());
+                    if (numberOfMessagesReadSoFar >= numberOfMessagesToRead){
+                        keepOnReading = false; // to exit the while loop
+                        break; // to exit the for loop
+                    }
                 }
             }
         }
+
+        // assign and seek are mostly used to replay data or fetch a specific message
 
         log.info("Exiting the application");
 

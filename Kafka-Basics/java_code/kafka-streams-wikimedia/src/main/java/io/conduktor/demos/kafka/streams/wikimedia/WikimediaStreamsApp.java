@@ -8,6 +8,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.KStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,7 +43,11 @@ public class WikimediaStreamsApp {
 
         final Topology appTopology = builder.build();
         LOGGER.info("Topology: {}", appTopology.describe());
-        KafkaStreams streams = new KafkaStreams(appTopology, properties);
-        streams.start();
+        try (KafkaStreams streams = new KafkaStreams(appTopology, properties)) {
+            streams.start();
+        } catch (StreamsException | IllegalStateException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
     }
 }

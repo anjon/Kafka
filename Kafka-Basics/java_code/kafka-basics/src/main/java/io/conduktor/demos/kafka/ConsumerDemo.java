@@ -39,26 +39,26 @@ public class ConsumerDemo {
         properties.setProperty("group.id", groupId);
         properties.setProperty("auto.offset.reset", "earliest");
 
-        // create a consumer
-        KafkaConsumer<String, String> consumer = new KafkaConsumer<>(properties);
+        try (// create a consumer
+        KafkaConsumer<String, String> consumer = new KafkaConsumer<>(properties)) {
+            // subscribe to a topic
+            consumer.subscribe(Arrays.asList(topic));
 
-        // subscribe to a topic
-        consumer.subscribe(Arrays.asList(topic));
+            // poll for data
+            while (true) {
 
-        // poll for data
-        while (true) {
+                log.info("Polling");
 
-            log.info("Polling");
+                ConsumerRecords<String, String> records =
+                        consumer.poll(Duration.ofMillis(1000));
 
-            ConsumerRecords<String, String> records =
-                    consumer.poll(Duration.ofMillis(1000));
+                for (ConsumerRecord<String, String> record: records) {
+                    log.info("Key: " + record.key() + ", Value: " + record.value());
+                    log.info("Partition: " + record.partition() + ", Offset: " + record.offset());
+                }
 
-            for (ConsumerRecord<String, String> record: records) {
-                log.info("Key: " + record.key() + ", Value: " + record.value());
-                log.info("Partition: " + record.partition() + ", Offset: " + record.offset());
+
             }
-
-
         }
 
 
