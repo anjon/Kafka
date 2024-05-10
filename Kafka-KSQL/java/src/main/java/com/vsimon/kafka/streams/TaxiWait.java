@@ -44,8 +44,3 @@ public class TaxiWait {
         return dist * weather_factor / 50.0;
     }
 }
-
-
-
-
-
