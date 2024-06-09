@@ -2,3 +2,4 @@
 *.class
 # Mac specific 
 .DS_Store
+*.idea

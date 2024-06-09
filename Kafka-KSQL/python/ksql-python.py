@@ -1,4 +1,4 @@
-from ksql import KSQLAPI
+from ksql import KSQLAPI # type: ignore
 #  Refer to https://pypi.org/project/ksql/
 
 client = KSQLAPI('http://localhost:8088')
