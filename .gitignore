@@ -3,3 +3,5 @@
 # Mac specific 
 .DS_Store
 *.idea
+.idea
+.venv
