@@ -18,7 +18,7 @@ def list_all_topics():
 
 def get_topic_end_offsets(topic):
     partitions = consumer.list_topics().topics[topic].partitions.keys()
-    print(f'----{partitions}')
+    print(f'{topic}----{partitions}')
     #return {partition: consumer.get_watermark_offsets(consumer.assign([(topic, partition)]))[1] for partition in partitions}
 
 def get_last_message_timestamp(topic):

@@ -1,0 +1,6 @@
+topic_name,partitions,replication_factor
+transaction-01,3,1
+transaction-02,3,1
+transaction-03,3,1
+transaction-04,6,1
+transaction-05,6,1
