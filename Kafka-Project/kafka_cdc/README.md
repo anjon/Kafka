@@ -92,12 +92,10 @@ services:
       CONNECT_VALUE_CONVERTER: io.confluent.connect.avro.AvroConverter
       CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
       CONNECT_PLUGIN_PATH: "/usr/share/java,/usr/share/confluent-hub-components"
-    command:
-      - bash
-      - -c
-      - |
-        confluent-hub install --no-prompt debezium/debezium-connector-postgresql:latest
-        /etc/confluent/docker/run
+    command: ["sh", "-c", "
+      confluent-hub install --no-prompt debezium/debezium-connector-postgresql:latest && 
+      confluent-hub install --no-prompt confluentinc/kafka-connect-jdbc:latest && 
+      /etc/confluent/docker/run"]
     networks:
       - streaming-network
 
