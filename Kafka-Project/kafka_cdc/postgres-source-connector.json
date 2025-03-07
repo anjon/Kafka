@@ -6,18 +6,18 @@
     "database.port": "5432",
     "database.user": "postgres",
     "database.password": "password",
-    "database.dbname": "kafka_db",
-    "table.include.list": "public.source_table",
-    "database.server.name": "pgserver",
-    "database.history.kafka.bootstrap.servers": "broker:29092",
-    "database.history.kafka.topic": "schema-changes.pg",
+    "database.dbname": "kafkadb",
+    "database.server.name": "postgres_server",
     "plugin.name": "pgoutput",
     "slot.name": "debezium_slot",
     "publication.name": "debezium_pub",
-    "transforms": "unwrap",
-    "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
-    "key.converter": "org.apache.kafka.connect.storage.StringConverter",
+    "table.include.list": "public.persons",
+    "database.history.kafka.bootstrap.servers": "kafka:9092",
+    "database.history.kafka.topic": "schema-changes.postgres",
+    "topic.prefix": "postgres",
+    "key.converter": "org.apache.kafka.connect.json.JsonConverter",
     "value.converter": "org.apache.kafka.connect.json.JsonConverter",
-    "value.converter.schemas.enable": "false"
+    "key.converter.schemas.enable": false,
+    "value.converter.schemas.enable": false
   }
 }
