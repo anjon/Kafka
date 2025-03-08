@@ -345,6 +345,7 @@ if __name__ == "__main__":
 Now as our postgres database is ready I can start generating data for the source (persons) table. 
 
 ```sh
+pip install psycopg2-binary Faker
 python populate_db.py
 ```
 To verify the data in postgres we can login to the database and run the below command. 
