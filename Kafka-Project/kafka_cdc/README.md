@@ -1,7 +1,9 @@
 ## This is a practice to implement Kafka-Connect End-to-End
 
+In this project I'm doing the realtime change data capture (CDC) end-to-end demonestration. In the 1st part, I'm poulating data in the postgres database using a python script and by using Debizium postgres-source-connector I'm fetching the data from postgres db to kafka topics. And in the 2nd part, by using the JDBC sink connector I'm pushing data from the same kafka topic to another table in the same database. 
+
 ### Creating docker-compose file to create local kafka cluster
-For the local cluster I am using kafka kraft mode and below components 
+For the local Kafka cluster setup, I am using kafka kraft mode and with below components 
 - One controller,kafka instance
 - One schema-registry
 - One kafka-connect
@@ -11,7 +13,7 @@ For the local cluster I am using kafka kraft mode and below components
 The architecure diagram should be like this 
 ![Confluent Kafka Connect](resources/kafka-connect-architecture.jpg)
 
-below is the docker-compose file which I used. 
+below is the `docker-compose.yml` file which I used. 
 
 ```yml
 name: 'streaming'
@@ -66,7 +68,7 @@ services:
       SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'broker:29092'
       SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
     networks:
-      - streaming-network    
+      - streaming-network
 
   connect:
     image: confluentinc/cp-kafka-connect:7.9.0
@@ -131,10 +133,14 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
-      POSTGRES_DB: kafka_db
+      POSTGRES_DB: kafkadb
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    command: [ "postgres", "-c", "wal_level=logical" ]
+    command: ["postgres",
+              "-c", "wal_level=logical",
+              "-c", "max_replication_slots=5",
+              "-c", "max_wal_senders=5"
+    ]
     networks:
       - streaming-network
 
@@ -146,7 +152,7 @@ networks:
     driver: bridge
 ```
 
-You can replace the cluster id by using the following command and replace it with the existing one. 
+You can generate the `cluster.id` for your use by using the following command and replace it with the existing one. 
 ```sh
 docker run --rm confluentinc/cp-server:7.9.0 kafka-storage random-uuid
 ```
@@ -155,14 +161,280 @@ Let's spin-up the cluster
 ```sh
 docker compose up -d 
 ```
-If you go to browser with http://localhost:9021 you can see the control center GUI like this.
+If you go to browser with `http://localhost:9021` you should see the Confluent-Control-Center GUI like this.
 ![Control-Center](resources/control-center.jpg)
 
 Now if you go inside the controlcenter and select connect from the left panel you can see the connect cluster which is **connect-default**.
 ![Connect-Cluster](resources/connec-cluster.jpg)
 
-If you select this connect cluster then we can see our running connectors which running in it.
-![Running-connectors](resources/running-connectors.jpg) 
+### Populate data into Postgres using Python script. 
+The below script is doing the following steps.
+- Creating table person in kafkadb 
+- Create replication slot for kafkadb
+- Create publication slot for kafkadb
+- Grant some permission for replicatio & publication slots
+- Populate sample date to the database table persons
+
+I use python Faker library to generate some sample data.
+```python
+import argparse
+import psycopg2
+from psycopg2 import sql
+from faker import Faker
+import random
+import time
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(description="Configure PostgreSQL for CDC and populate with random data.")
+    parser.add_argument("--db_name", type=str, default="kafkadb", help="Database name")
+    parser.add_argument("--db_user", type=str, default="postgres", help="Database user")
+    parser.add_argument("--db_password", type=str, default="password", help="Database password")
+    parser.add_argument("--db_host", type=str, default="localhost", help="Database host")
+    parser.add_argument("--db_port", type=int, default=5432, help="Database port")
+    parser.add_argument("--num_records", type=int, default=50, help="Number of records to insert")
+    parser.add_argument("--replication_slot", type=str, default="debezium_slot", help="Replication slot name")
+    parser.add_argument("--publication_name", type=str, default="debezium_pub", help="Publication name")
+    return parser.parse_args()
+
+# Create database connection
+def connect_db(args):
+    conn = psycopg2.connect(
+        dbname=args.db_name,
+        user=args.db_user,
+        password=args.db_password,
+        host=args.db_host,
+        port=args.db_port
+    )
+    return conn
+
+# Create table if not exists
+def create_table(conn):
+    with conn.cursor() as cur:
+        cur.execute("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_schema = 'public' 
+                AND table_name = 'persons'
+            );
+        """)
+        table_exists = cur.fetchone()[0]
+
+        if table_exists:
+            print("Table 'persons' already exists.")
+        else:
+            cur.execute("""
+                CREATE TABLE persons (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(50),
+                    surname VARCHAR(50),
+                    age INT,
+                    gender VARCHAR(10),
+                    country VARCHAR(100),
+                    email VARCHAR(100)
+                )
+            """)
+            conn.commit()
+            print("Table 'persons' created successfully.")
+
+# Grant replication privileges
+def grant_replication_privileges(conn, user):
+    with conn.cursor() as cur:
+        cur.execute(f"ALTER ROLE {user} WITH REPLICATION;")
+        conn.commit()
+        print(f"Replication privileges granted to user '{user}'.")
+
+# Verify existing replication slot and publication
+def verify_setup(conn, slot_name, publication_name):
+    with conn.cursor() as cur:
+        cur.execute("SELECT slot_name FROM pg_replication_slots WHERE slot_name = %s;", (slot_name,))
+        slot_exists = cur.fetchone() is not None
+
+        cur.execute("SELECT pubname FROM pg_publication WHERE pubname = %s;", (publication_name,))
+        publication_exists = cur.fetchone() is not None
+
+    return slot_exists, publication_exists
+
+# Create replication slot if not exists
+def create_replication_slot(conn, slot_name):
+    slot_exists, _ = verify_setup(conn, slot_name, "")
+    if slot_exists:
+        print(f"Replication slot '{slot_name}' already exists.")
+        return
+
+    with conn.cursor() as cur:
+        try:
+            cur.execute(f"SELECT pg_create_logical_replication_slot('{slot_name}', 'pgoutput');")
+            conn.commit()
+            print(f"Replication slot '{slot_name}' created successfully.")
+        except Exception as e:
+            conn.rollback()
+            print(f"Error creating replication slot: {e}")
+
+# Create publication if not exists
+def create_publication(conn, publication_name):
+    _, publication_exists = verify_setup(conn, "", publication_name)
+    if publication_exists:
+        print(f"Publication '{publication_name}' already exists.")
+        return
+
+    with conn.cursor() as cur:
+        try:
+            cur.execute(f"CREATE PUBLICATION {publication_name} FOR TABLE public.persons;")
+            conn.commit()
+            print(f"Publication '{publication_name}' created successfully.")
+        except Exception as e:
+            conn.rollback()
+            print(f"Error creating publication: {e}")
+
+# Insert random data
+# Insert random data with a 2-second delay
+def insert_data(conn, num_records):
+    fake = Faker()
+    with conn.cursor() as cur:
+        for i in range(num_records):
+            gender = random.choice(["Male", "Female"])
+            name = fake.first_name_male() if gender == "Male" else fake.first_name_female()
+            surname = fake.last_name()
+            age = fake.random_int(min=18, max=80)
+            country = fake.country()
+            email = fake.email()
+
+            # Print the data before inserting
+            print(f"Inserting {i+1}/{num_records}: Name={name}, Surname={surname}, Age={age}, Gender={gender}, Country={country}, Email={email}")
+
+            cur.execute(
+                "INSERT INTO persons (name, surname, age, gender, country, email) VALUES (%s, %s, %s, %s, %s, %s)",
+                (name, surname, age, gender, country, email)
+            )
+            conn.commit()  # Commit after each insert
+            time.sleep(1)  # Wait 2 seconds before inserting the next record
+
+    print(f"\nSuccessfully inserted {num_records} records into the database.")
+
+# Main function
+def main():
+    args = parse_arguments()
+    with connect_db(args) as conn:
+        try:
+            grant_replication_privileges(conn, args.db_user)
+            create_table(conn)  # Ensure the table exists before creating publication
+
+            slot_exists, publication_exists = verify_setup(conn, args.replication_slot, args.publication_name)
+
+            if not slot_exists:
+                create_replication_slot(conn, args.replication_slot)
+
+            if not publication_exists:
+                create_publication(conn, args.publication_name)
+
+            insert_data(conn, args.num_records)
+            print(f"Database configured and populated with {args.num_records} records.")
+        except Exception as e:
+            conn.rollback()
+            print(f"Error: {e}")
+
+if __name__ == "__main__":
+    main()
+```
+Now as our postgres database is ready I can start generating data for the persons table. 
+
+```sh
+python populate_db.py
+```
+To verify the data we can login to the database and run the below command. 
+```sh
+docker exec -it postgres psql -U postgres -d kafkadb
+```
+![KafkaDB-Persons](resources/data-in-persons.jpg)
+
+### Postgres Source Connector
+So as the data is in the databas now we can deploy the source connector to fetch data from database to the kafka topic. I'm using the Postgres Source Connector for this. Below is the connector defination file `postgres-source-connector.json`
+
+```json
+{
+  "name": "postgres-source-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
+    "database.hostname": "postgres",
+    "database.port": "5432",
+    "database.user": "postgres",
+    "database.password": "password",
+    "database.dbname": "kafkadb",
+    "database.server.name": "postgres_server",
+    "plugin.name": "pgoutput",
+    "slot.name": "debezium_slot",
+    "publication.name": "debezium_pub",
+    "table.include.list": "public.persons",
+    "database.history.kafka.bootstrap.servers": "kafka:9092",
+    "database.history.kafka.topic": "schema-changes.postgres",
+    "topic.prefix": "postgres",
+
+    "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "key.converter.schemas.enable": true,
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": true,
+
+    "transforms": "unwrap",
+    "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
+    "transforms.unwrap.drop.tombstones": "true",
+    "transforms.unwrap.delete.handling.mode": "rewrite"
+  }
+}
+```
+Now to register the connector defination file to the connect cluster using below rest call. 
+```sh
+curl -X POST http://localhost:8083/connectors -H "Content-Type: application/json" -d @postgres-source-connector.json
+```
+Now it should be visible under the connect server in the control center
+![Source-Connector](resources/postgres-source-connector.jpg)
+
+Also if we check in the cluster topics section there should be topics `postgres.public.persons` where the data from postgres should stored. If we check the message section of this topic we can see the data.
+![Source-Connector-Message](resources/source-connector-message.jpg)
+
+### JDBC Sink Connector
+Now we are going to use sink connector to push the data back to another table (persons_sink) in the databse. Normally there are some transformation is done but I'm skipping this to keep this simple. For sink connector here is the defination file `jdbc-sink-connector.json`. 
+```json
+{
+  "name": "jdbc-sink-connector",
+  "config": {
+    "connector.class": "io.confluent.connect.jdbc.JdbcSinkConnector",
+    "connection.url": "jdbc:postgresql://postgres:5432/kafkadb",
+    "connection.user": "postgres",
+    "connection.password": "password",
+    "topics": "postgres.public.persons",
+    "table.name.format": "public.persons_sink",
+    "auto.create": "true",
+    "auto.evolve": "true",
+    "insert.mode": "upsert",
+    "pk.fields": "id",
+    "pk.mode": "record_key",
+    "delete.enabled": "false",
+    "key.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "key.converter.schemas.enable": true,
+    "value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "value.converter.schemas.enable": true
+  }
+}
+```
+
+Let's deploy the this sink connector via the connector rest api.
+```sh
+curl -X POST http://localhost:8083/connectors -H "Content-Type: application/json" -d @jdbc-sink-connector.json
+```
+In the control center connect section now there are 2 connectors should be visible like below. 
+![jdbc-sink-connector](resources/jdbc-sink-connector.jpg)
+
+To verify the data is pushed back from topic to the database let's login to postgres and check using the below command
+```sh
+docker exec -it postgres psql -U postgres -d kafkadb
+```
+
+check the databse data using below command. 
+```sql
+kafkadb=# select * from persons LIMIT 10;
+kafkadb=# select * from persons_sink LIMIT 10;
+```
+![data-verify](resources/data-verify.jpg)
 
 We can also use the more api call to list the connectors and some more details like below
 ```sh
@@ -175,110 +447,3 @@ http://localhost:8083/connectors/postgres-source-connector/config
 ![Connector-details](resources/single-connector-details.jpg)
 ![Connector-Status](resources/connector-status.jpg)
 ![Connector-Configuration](resources/connector-config.jpg)
-
-### Postgres Settings
-Before starting on the kafka connect part we need to do few changes on the postgres level to make it work with CDC(Change data capture).
-
-Open a shell inside the PostgreSQL container:
-```sh
-docker exec -it postgres psql -U postgres -d kafka_db
-```
-Run the following SQL commands:
-```sql
--- Configure max_replication_slots and max_wal_senders 
-ALTER SYSTEM SET max_replication_slots = 5;
-ALTER SYSTEM SET max_wal_senders = 5;
-SELECT pg_reload_conf();
-
--- Create a replication slot
-SELECT * FROM pg_create_logical_replication_slot('debezium_slot', 'pgoutput');
-
--- Create a sample table for testing
-CREATE TABLE users (
-    id SERIAL PRIMARY KEY,
-    name TEXT NOT NULL,
-    email TEXT NOT NULL UNIQUE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Insert test data
-INSERT INTO users (name, email) VALUES 
-('user1', 'user1@example.com'),
-('user2', 'user2@example.com');
-```
-
-Now we need to create a connector configuration json file postgres-source-connector.json. 
-```json
-{
-  "name": "postgres-source-connector",
-  "config": {
-    "connector.class": "io.debezium.connector.postgresql.PostgresConnector",
-    "database.hostname": "postgres",
-    "database.port": "5432",
-    "database.user": "postgres",
-    "database.password": "password",
-    "database.dbname": "kafka_db",
-    "database.server.name": "postgres_server",
-    "topic.prefix": "postgres",
-    "plugin.name": "pgoutput",
-    "slot.name": "debezium_slot",
-    "table.include.list": "public.users",
-    "database.history.kafka.bootstrap.servers": "broker:29092",
-    "database.history.kafka.topic": "schema-changes.postgres",
-    "include.schema.changes": "true"
-  }
-}
-```
-Now we need to register this to the connect server using the below command. 
-```sh
-curl.exe -X POST http://localhost:8083/connectors -H "Content-Type: application/json" -d @postgres-source-connector.json
-```
-Now to check the status of the connectors we can use the below command
-```sh
-curl.exe http://localhost:8083/connectors/postgres-source-connector/status
-```
-Now to check this realtime CDC lets open a db session and try to add some data. Before that lets open the associates topic in controlcenter where the data will be visible.
-```sh
-docker exec -it postgres psql -U postgres -d kafka_db
-```
-```sql
-kafka_db=# INSERT INTO users (name, email) VALUES ('user2', 'user1@example.com');
-kafka_db=# INSERT INTO users (name, email) VALUES ('user2', 'user2@example.com');
-kafka_db=# INSERT INTO users (name, email) VALUES ('user3', 'user3@example.com');
-kafka_db=# INSERT INTO users (name, email) VALUES ('user4', 'user4@example.com');
-```
-In the controlcenter topic we can see the data is being fetched in realtime from db to the topics by the connector
-![Topic-data](resources/view-topic-data.jpg)
-
-## Sink Connector Configuration 
-Now using the sink connector we need to get the data from the kafka topic and then send it back to a new table of the same postgres instance.
-
-#### Create a table in PostgreSQL that matches the data structure from Kafka.
-```sql
-CREATE TABLE users_sink (
-    id SERIAL PRIMARY KEY,
-    name TEXT,
-    email TEXT,
-    created_at TIMESTAMP
-);
-```
-Now we need to create a sink connector defination file i.e. postgres-sink-connector.json
-```json
-{
-  "name": "postgres-sink-connector",
-  "config": {
-    "connector.class": "io.confluent.connect.jdbc.JdbcSinkConnector",
-    "tasks.max": "1",
-    "topics": "postgres.public.users",
-    "connection.url": "jdbc:postgresql://postgres:5432/kafka_db",
-    "connection.user": "postgres",
-    "connection.password": "password",
-    "auto.create": "true",
-    "auto.evolve": "true",
-    "insert.mode": "upsert",
-    "pk.mode": "record_value",
-    "pk.fields": "id",
-    "delete.enabled": "false"
-  }
-}
-```
