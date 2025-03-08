@@ -1,8 +1,18 @@
-## This is a practice to implement Kafka-Connect End-to-End
+# Introduction to Change Data Capture (CDC)
+In modern data-driven architectures, businesses require real-time access to their data as it evolves. Traditional batch-based data movement strategies, such as periodic database exports and ETL processes, often lead to latency, data inconsistencies, and performance overheads. **Change Data Capture (CDC)** is a methodology that enables real-time tracking and streaming of changes in a database, allowing for immediate data propagation to downstream systems such as data warehouses, analytics platforms, and event-driven applications.
 
-In this project I'm doing the realtime change data capture (CDC) end-to-end demonestration. In the 1st part, I'm poulating data in the postgres database using a python script and by using Debizium postgres-source-connector I'm fetching the data from postgres db to kafka topics. And in the 2nd part, by using the JDBC sink connector I'm pushing data from the same kafka topic to another table in the same database. 
+CDC is especially valuable in microservices, event-driven architectures, and real-time analytics. By capturing **inserts, updates, and deletes** in a source database and publishing them as events, CDC enables applications to react instantly to data modifications.
 
-### Creating docker-compose file to create local kafka cluster
+## How Does CDC Work?
+The core idea behind CDC is to monitor database transaction logs (Write-Ahead Logs in PostgreSQL, binlogs in MySQL) to detect changes without significantly impacting the performance of the primary database. These changes are then streamed to Kafka topics, where consumers can process, transform, and store them in target systems.
+
+### Typical CDC Pipeline with Kafka
+The following diagram illustrates a Kafka-based CDC pipeline, where changes in a PostgreSQL database are captured using Debezium source connector, streamed via Kafka topics, and then consumed by JDBC sink connector and write back to database table. 
+
+The architecure diagram should be like this 
+![Confluent Kafka Connect](resources/kafka-connect-architecture.jpg)
+
+### Creating docker-compose file to create local Kafka cluster
 For the local Kafka cluster setup, I am using kafka kraft mode and with below components 
 - One controller,kafka instance
 - One schema-registry
@@ -10,12 +20,9 @@ For the local Kafka cluster setup, I am using kafka kraft mode and with below co
 - One control-center 
 - One postgres db instance
 
-The architecure diagram should be like this 
-![Confluent Kafka Connect](resources/kafka-connect-architecture.jpg)
-
 below is the `docker-compose.yml` file which I used. 
 
-```yml
+```yaml
 name: 'streaming'
 
 services:
@@ -286,8 +293,7 @@ def create_publication(conn, publication_name):
             conn.rollback()
             print(f"Error creating publication: {e}")
 
-# Insert random data
-# Insert random data with a 2-second delay
+# Insert random data with a 1-second delay
 def insert_data(conn, num_records):
     fake = Faker()
     with conn.cursor() as cur:
@@ -307,7 +313,7 @@ def insert_data(conn, num_records):
                 (name, surname, age, gender, country, email)
             )
             conn.commit()  # Commit after each insert
-            time.sleep(1)  # Wait 2 seconds before inserting the next record
+            time.sleep(1)  # Wait 1 seconds before inserting the next record
 
     print(f"\nSuccessfully inserted {num_records} records into the database.")
 
@@ -336,14 +342,15 @@ def main():
 if __name__ == "__main__":
     main()
 ```
-Now as our postgres database is ready I can start generating data for the persons table. 
+Now as our postgres database is ready I can start generating data for the source (persons) table. 
 
 ```sh
 python populate_db.py
 ```
-To verify the data we can login to the database and run the below command. 
+To verify the data in postgres we can login to the database and run the below command. 
 ```sh
 docker exec -it postgres psql -U postgres -d kafkadb
+kafkadb=# select * from persons LIMIT 10;
 ```
 ![KafkaDB-Persons](resources/data-in-persons.jpg)
 
