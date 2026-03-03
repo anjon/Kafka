@@ -1,0 +1,19 @@
+{
+  "type": "record",
+  "name": "UserRecord",
+  "namespace": "com.example",
+  "fields": [
+    { "name": "first_name", "type": "string" },
+    { "name": "last_name", "type": "string" },
+    { "name": "gender", "type": "string" },
+    { "name": "address", "type": "string" },
+    { "name": "post_code", "type": [ "string", "int" ] },
+    { "name": "email", "type": "string" },
+    { "name": "username", "type": "string" },
+    { "name": "dob", "type": "string" },
+    { "name": "registered_date", "type": "string" },
+    { "name": "phone", "type": ["null", "string"], "default": null },
+    { "name": "picture", "type": "string" },
+    { "name": "country", "type": "string" }
+  ]
+}
