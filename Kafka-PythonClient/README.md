@@ -8,6 +8,8 @@ It includes:
 - A Python producer using Avro serialization
 - Deterministic partition routing using country-based message keys
 - Fetching and transforming real user data from an external API
+
+![Kafka Project Diagram](kafka_producer_diagram.png)
 ---
 
 ## Features
