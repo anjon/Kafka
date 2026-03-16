@@ -62,24 +62,21 @@ OpenWeather API → Custom Connector → Kafka Connect → Kafka Broker → Kafk
 
 # 📦 Project Structure
 
+```
 weather-source-connector
-
-src/main/java/com/example
-
-WeatherSourceConnector.java  
-Defines the connector configuration
-
-WeatherSourceTask.java  
-Polls OpenWeather API and produces records
-
-WeatherSourceConfig.java  
-Connector configuration parameters
-
-OpenWeatherClient.java  
-HTTP client that calls the OpenWeather API
-
-resources  
-META-INF/services/org.apache.kafka.connect.connector.Connector
+│
+├── src/main/java/com/example
+│   ├── WeatherSourceConnector.java
+│   ├── WeatherSourceTask.java
+│   ├── WeatherSourceConfig.java
+│   └── OpenWeatherClient.java
+│
+├── src/main/resources
+│   └── META-INF/services
+│
+├── pom.xml
+└── README.md
+```
 
 ---
 
