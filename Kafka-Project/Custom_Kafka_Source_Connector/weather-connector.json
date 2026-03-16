@@ -1,0 +1,12 @@
+{
+  "name": "WeatherSourceConnector",
+  "config": {
+    "name": "WeatherSourceConnector",
+    "connector.class": "com.example.WeatherSourceConnector",
+    "tasks.max": "1",
+    "openweather.api.key": "XXXXXXXX",
+    "openweather.city": "Wrocław",
+    "kafka.topic": "my_weather_topic",
+    "poll.interval.ms": "10000"
+  }
+}
